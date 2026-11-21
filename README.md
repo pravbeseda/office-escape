@@ -18,7 +18,7 @@ Clone the repository and open `index.html` in a browser. There is nothing to bui
 
 - You start at your desk on the 5th floor. Find the stairs down on each floor; the exit is in the lobby on the 1st floor.
 - Each floor is a 4×4 grid of screens. A screen is generated the first time you walk into it: open-plan offices, glass meeting rooms, kitchens, server rooms, corridors, a boss's office.
-- Bosses see you only inside their view cone and line of sight. Walls, cubicle partitions, plants and server racks hide you; glass and desks do not.
+- Bosses spot you inside their view cone when nothing blocks the line of sight, and up close they notice you even from behind. Walls, cubicle partitions, plants and server racks hide you; glass and desks do not.
 - PMs roam the top floors; team leads, directors and the CEO wait further down. Once they spot you, they chase you, through doors too.
 - A catch sends you back to your desk in the same building, so every attempt teaches you the way. A new game builds a new building.
 - A guard watches the turnstiles at the exit. Slip past while he reads his newspaper.
