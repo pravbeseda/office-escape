@@ -1,0 +1,8 @@
+{
+  "name": "office-escape",
+  "private": true,
+  "description": "16-bit style escape from a procedurally generated office building",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}
