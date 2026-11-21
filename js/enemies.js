@@ -19,45 +19,11 @@
 
   // speed in px/s (the hero runs at 72), sight in tiles, memory in seconds of tracking after losing sight.
   const ENEMY_TYPES = {
-    pm: {
-      name: 'PM', speed: 50, sight: 7, memory: 1.2,
-      lines: [
-        'Есть минутка? Давай быстренько созвонимся, буквально на час.',
-        'А что по срокам? Мне нужен статус к обеду. Вчерашнему.',
-        'Тут клиент попросил одну маленькую правку. Совсем крошечную.',
-      ],
-    },
-    lead: {
-      name: 'Тимлид', speed: 57, sight: 8, memory: 1.8,
-      lines: [
-        'Код-ревью само себя не сделает.',
-        'Прод упал. Ты же не домой собрался?',
-        'Давай-ка возьмёшь ещё один тикет до вечера.',
-      ],
-    },
-    director: {
-      name: 'Директор', speed: 63, sight: 9, memory: 2.4,
-      lines: [
-        'Зайди ко мне. Обсудим твою мотивацию.',
-        'Мы же одна семья! Куда ты собрался?',
-        'Овертайм — это инвестиция в себя.',
-      ],
-    },
-    ceo: {
-      name: 'CEO', speed: 68, sight: 10, memory: 3.2,
-      lines: [
-        'У нас стратегическая сессия до полуночи. Ты нам нужен.',
-        'Мы меняем мир! Без тебя никак.',
-        'Опционы получишь... когда-нибудь. Садись.',
-      ],
-    },
-    guard: {
-      name: 'Вахтёр', speed: 82, sight: 9, memory: 0.6, stationary: true,
-      lines: [
-        'Куда без отметки? Рабочий день ещё не кончился.',
-        'Пропуск забыли? Возвращайтесь на рабочее место.',
-      ],
-    },
+    pm: { speed: 50, sight: 7, memory: 1.2 },
+    lead: { speed: 57, sight: 8, memory: 1.8 },
+    director: { speed: 63, sight: 9, memory: 2.4 },
+    ceo: { speed: 68, sight: 10, memory: 3.2 },
+    guard: { speed: 82, sight: 9, memory: 0.6, stationary: true },
   };
 
   const FLOOR_ROSTER = {

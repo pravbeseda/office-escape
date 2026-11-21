@@ -137,7 +137,7 @@
 
   const MONITOR_COLORS = ['#5fb8e8', '#4fd1c5', '#7a8fd6', '#334058'];
 
-  function paintScreen(screen) {
+  function paintScreen(screen, exitLabel) {
     const canvas = makeCanvas(COLS * TILE, ROWS * TILE);
     const g = canvas.getContext('2d');
     const leds = [];
@@ -384,7 +384,7 @@
       g.textBaseline = 'top';
       g.textAlign = 'center';
       g.fillStyle = '#5dff8f';
-      g.fillText('ВЫХОД', x + w / 2, y);
+      g.fillText(exitLabel, x + w / 2, y);
     }
     return { canvas, leds };
   }

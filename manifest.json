@@ -1,7 +1,7 @@
 {
-  "name": "Побег из опенспейса",
-  "short_name": "Побег",
-  "lang": "ru",
+  "name": "Office Escape",
+  "short_name": "Escape",
+  "lang": "en",
   "start_url": ".",
   "display": "fullscreen",
   "background_color": "#07080d",

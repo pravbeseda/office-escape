@@ -1,19 +1,20 @@
 (function (root) {
   'use strict';
   const { World } = root.WorldModel;
-  const { ENEMY_TYPES } = root.Enemies;
+  const { STRINGS, pickLanguage } = root.I18n;
 
   const STEP = 1 / 60;
   const TYPE_SPEED = 40;
   const SLIDE_TIME = 0.45;
-  const INTRO = [
-    'Пятница, 18:57. Шестой созвон за день наконец закончился.',
-    'Хватит. Я ухожу домой. Прямо сейчас.',
-    'Выход в лобби на 1-м этаже. Главное — не попасться начальству на глаза.',
-  ];
+
+  const lang = pickLanguage(navigator.languages);
+  const strings = STRINGS[lang];
+  document.documentElement.lang = lang;
+  document.title = strings.name;
+  document.getElementById('pause').setAttribute('aria-label', strings.pauseButton);
 
   const canvas = document.getElementById('screen');
-  const view = root.Render.createRenderer(canvas, matchMedia('(pointer: coarse)').matches);
+  const view = root.Render.createRenderer(canvas, matchMedia('(pointer: coarse)').matches, strings);
   const input = root.Input.createInput(window, document.getElementById('stick'));
   let scene = null;
   let time = 0;
@@ -25,7 +26,7 @@
       update() {
         if (input.consume('confirm')) {
           const world = new World((Math.random() * 2 ** 32) >>> 0);
-          go(dialogScene(world, 'Я', INTRO, () => playScene(world)));
+          go(dialogScene(world, strings.me, strings.intro, () => playScene(world)));
         }
       },
       draw() { view.drawTitle(time); },
@@ -56,7 +57,7 @@
         if (input.consume('pause')) return go(pauseScene(world, this));
         for (const event of world.update(dt, input.move())) {
           if (event.type === 'screen') return go(slideScene(world, event, this));
-          if (event.type === 'floor') return go(cardScene(world, [`ЭТАЖ ${event.to}`], () => playScene(world)));
+          if (event.type === 'floor') return go(cardScene(world, [`${strings.floor} ${event.to}`], () => playScene(world)));
           if (event.type === 'caught') return go(caughtScene(world, event.enemy));
           if (event.type === 'win') return go(winScene(world));
         }
@@ -96,10 +97,10 @@
   }
 
   function caughtScene(world, enemy) {
-    const type = ENEMY_TYPES[enemy.type];
-    const line = type.lines[Math.floor(Math.random() * type.lines.length)];
-    return dialogScene(world, type.name, [line], () =>
-      cardScene(world, ['...И СНОВА', 'ЗА КОМПОМ'], () => playScene(world), () => world.resetAfterCatch()));
+    const { name, lines } = strings.enemies[enemy.type];
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    return dialogScene(world, name, [line], () =>
+      cardScene(world, strings.backAtDesk, () => playScene(world), () => world.resetAfterCatch()));
   }
 
   function pauseScene(world, back) {
