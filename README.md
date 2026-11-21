@@ -6,13 +6,13 @@
 
 ## Play
 
-Clone the repository and open `index.html` in a browser. There is nothing to build or install. The in-game text is in Russian.
+Play at <https://pravbeseda.github.io/office-escape/>, on a computer or a phone. On a phone, add the page to the home screen to play full screen without the browser bars. To play locally, clone the repository and open `index.html` in a browser; there is nothing to build or install. The in-game text is in Russian.
 
-| Key | Action |
-| --- | --- |
-| Arrows / WASD | Move |
-| Enter / Space | Start, continue a dialogue |
-| Esc / P | Pause |
+| Action | Keyboard | Touch screen |
+| --- | --- | --- |
+| Move | Arrows / WASD | Drag a finger anywhere on the screen |
+| Start, continue a dialogue | Enter / Space | Tap |
+| Pause | Esc / P | The II button |
 
 ## Rules
 
