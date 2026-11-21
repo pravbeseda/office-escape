@@ -2,6 +2,7 @@
   "name": "office-escape",
   "private": true,
   "description": "16-bit style escape from a procedurally generated office building",
+  "license": "MIT",
   "scripts": {
     "test": "node --test tests/"
   }
