@@ -13,8 +13,8 @@
   ];
 
   const canvas = document.getElementById('screen');
-  const view = root.Render.createRenderer(canvas);
-  const input = root.Input.createInput(window);
+  const view = root.Render.createRenderer(canvas, matchMedia('(pointer: coarse)').matches);
+  const input = root.Input.createInput(window, document.getElementById('stick'));
   let scene = null;
   let time = 0;
 
@@ -121,7 +121,9 @@
   }
 
   function fit() {
-    const scale = Math.max(1, Math.floor(Math.min(innerWidth / canvas.width, innerHeight / canvas.height)));
+    const fill = Math.min(innerWidth / canvas.width, innerHeight / canvas.height);
+    // Whole multiples keep pixels even; below 2x rounding down would waste most of a phone screen.
+    const scale = fill >= 2 ? Math.floor(fill) : fill;
     canvas.style.width = `${canvas.width * scale}px`;
     canvas.style.height = `${canvas.height * scale}px`;
   }

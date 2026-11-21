@@ -10,8 +10,19 @@
   const VIEW_H = 240;
   const HUD_H = VIEW_H - FIELD_H;
   const SPRITE_OFFSET_Y = 10;
+  const HINTS = {
+    keys: {
+      start: 'НАЖМИ ENTER', move: 'СТРЕЛКИ/WASD - ИДТИ', pause: 'ESC - ПАУЗА',
+      resume: 'ESC - ПРОДОЛЖИТЬ', again: 'ENTER - НОВОЕ ЗДАНИЕ',
+    },
+    touch: {
+      start: 'КОСНИСЬ ЭКРАНА', move: 'ВЕДИ ПАЛЬЦЕМ - ИДТИ', pause: 'КНОПКА II - ПАУЗА',
+      resume: 'КОСНИСЬ - ПРОДОЛЖИТЬ', again: 'КОСНИСЬ - НОВОЕ ЗДАНИЕ',
+    },
+  };
 
-  function createRenderer(canvas) {
+  function createRenderer(canvas, touch) {
+    const hint = touch ? HINTS.touch : HINTS.keys;
     const g = canvas.getContext('2d');
     g.imageSmoothingEnabled = false;
     const backgrounds = new WeakMap();
@@ -197,7 +208,7 @@
       drawWorld(world, time);
       drawShade(0.55);
       text('ПАУЗА', VIEW_W / 2, VIEW_H / 2 - 12, '#ffd84a', { size: 16, align: 'center' });
-      text('ESC - ПРОДОЛЖИТЬ', VIEW_W / 2, VIEW_H / 2 + 14, '#ffffff', { align: 'center' });
+      text(hint.resume, VIEW_W / 2, VIEW_H / 2 + 14, '#ffffff', { align: 'center' });
     }
 
     function paintSkyline() {
@@ -247,9 +258,9 @@
       const chaser = { x: run - 30, y: 196, dir: 'right', moving: true, anim: time + 0.1 };
       drawCharacter('pm', chaser, 0, 0);
       drawCharacter('hero', runner, 0, 0);
-      if (Math.floor(time * 2) % 2 === 0) text('НАЖМИ ENTER', VIEW_W / 2, 140, '#ffffff', { align: 'center' });
-      text('СТРЕЛКИ/WASD - ИДТИ', VIEW_W / 2, 216, '#b8c0e0', { align: 'center' });
-      text('ESC - ПАУЗА', VIEW_W / 2, 228, '#b8c0e0', { align: 'center' });
+      if (Math.floor(time * 2) % 2 === 0) text(hint.start, VIEW_W / 2, 140, '#ffffff', { align: 'center' });
+      text(hint.move, VIEW_W / 2, 216, '#b8c0e0', { align: 'center' });
+      text(hint.pause, VIEW_W / 2, 228, '#b8c0e0', { align: 'center' });
     }
 
     function drawWin(world, time) {
@@ -259,7 +270,7 @@
       text(`ВРЕМЯ ПОБЕГА: ${formatTime(world.elapsed)}`, VIEW_W / 2, 90, '#ffffff', { align: 'center' });
       text(`ПОЙМАН: ${world.caughtCount}`, VIEW_W / 2, 106, '#ffffff', { align: 'center' });
       drawCharacter('hero', { x: VIEW_W / 2, y: 196 - Math.abs(Math.sin(time * 6)) * 8, dir: 'down', moving: false, anim: 0 }, 0, 0);
-      if (Math.floor(time * 2) % 2 === 0) text('ENTER - НОВОЕ ЗДАНИЕ', VIEW_W / 2, 218, '#ffd84a', { align: 'center' });
+      if (Math.floor(time * 2) % 2 === 0) text(hint.again, VIEW_W / 2, 218, '#ffd84a', { align: 'center' });
     }
 
     return { drawWorld, drawSlide, drawDialog, drawCard, drawShade, drawPause, drawTitle, drawWin };
