@@ -10,19 +10,9 @@
   const VIEW_H = 240;
   const HUD_H = VIEW_H - FIELD_H;
   const SPRITE_OFFSET_Y = 10;
-  const HINTS = {
-    keys: {
-      start: 'НАЖМИ ENTER', move: 'СТРЕЛКИ/WASD - ИДТИ', pause: 'ESC - ПАУЗА',
-      resume: 'ESC - ПРОДОЛЖИТЬ', again: 'ENTER - НОВОЕ ЗДАНИЕ',
-    },
-    touch: {
-      start: 'КОСНИСЬ ЭКРАНА', move: 'ВЕДИ ПАЛЬЦЕМ - ИДТИ', pause: 'КНОПКА II - ПАУЗА',
-      resume: 'КОСНИСЬ - ПРОДОЛЖИТЬ', again: 'КОСНИСЬ - НОВОЕ ЗДАНИЕ',
-    },
-  };
 
-  function createRenderer(canvas, touch) {
-    const hint = touch ? HINTS.touch : HINTS.keys;
+  function createRenderer(canvas, touch, strings) {
+    const hint = strings.hints[touch ? 'touch' : 'keys'];
     const g = canvas.getContext('2d');
     g.imageSmoothingEnabled = false;
     const backgrounds = new WeakMap();
@@ -62,7 +52,7 @@
     }
 
     function background(screen) {
-      if (!backgrounds.has(screen)) backgrounds.set(screen, paintScreen(screen));
+      if (!backgrounds.has(screen)) backgrounds.set(screen, paintScreen(screen, strings.exit));
       return backgrounds.get(screen);
     }
 
@@ -126,8 +116,8 @@
     function drawHud(world) {
       rect(0, 0, VIEW_W, HUD_H, '#11141f');
       rect(0, HUD_H - 1, VIEW_W, 1, '#2c3350');
-      text(`ЭТАЖ ${world.floor}`, 6, 4, '#ffd84a');
-      text(`ПОЙМАН:${world.caughtCount}`, 92, 4, '#e8ecf4');
+      text(`${strings.floor} ${world.floor}`, 6, 4, '#ffd84a');
+      text(`${strings.caught}:${world.caughtCount}`, 92, 4, '#e8ecf4');
       text(formatTime(world.elapsed), 210, 4, '#9aa3c0');
       const mx = VIEW_W - 4 - (GRID_W * 8 - 1);
       for (let y = 0; y < GRID_H; y++) {
@@ -207,7 +197,7 @@
     function drawPause(world, time) {
       drawWorld(world, time);
       drawShade(0.55);
-      text('ПАУЗА', VIEW_W / 2, VIEW_H / 2 - 12, '#ffd84a', { size: 16, align: 'center' });
+      text(strings.paused, VIEW_W / 2, VIEW_H / 2 - 12, '#ffd84a', { size: 16, align: 'center' });
       text(hint.resume, VIEW_W / 2, VIEW_H / 2 + 14, '#ffffff', { align: 'center' });
     }
 
@@ -251,8 +241,7 @@
     function drawTitle(time) {
       g.drawImage(skyline, 0, 0);
       drawShade(0.25);
-      text('ПОБЕГ ИЗ', VIEW_W / 2, 26, '#ffd84a', { size: 16, align: 'center' });
-      text('ОПЕНСПЕЙСА', VIEW_W / 2, 48, '#ffd84a', { size: 16, align: 'center' });
+      strings.title.forEach((line, i) => text(line, VIEW_W / 2, 26 + i * 22, '#ffd84a', { size: 16, align: 'center' }));
       const run = ((time * 40) % (VIEW_W + 80)) - 40;
       const runner = { x: run, y: 196, dir: 'right', moving: true, anim: time };
       const chaser = { x: run - 30, y: 196, dir: 'right', moving: true, anim: time + 0.1 };
@@ -266,9 +255,9 @@
     function drawWin(world, time) {
       g.drawImage(skyline, 0, 0);
       drawShade(0.35);
-      text('СВОБОДА!', VIEW_W / 2, 40, '#5dff8f', { size: 16, align: 'center' });
-      text(`ВРЕМЯ ПОБЕГА: ${formatTime(world.elapsed)}`, VIEW_W / 2, 90, '#ffffff', { align: 'center' });
-      text(`ПОЙМАН: ${world.caughtCount}`, VIEW_W / 2, 106, '#ffffff', { align: 'center' });
+      text(strings.freedom, VIEW_W / 2, 40, '#5dff8f', { size: 16, align: 'center' });
+      text(`${strings.escapeTime}: ${formatTime(world.elapsed)}`, VIEW_W / 2, 90, '#ffffff', { align: 'center' });
+      text(`${strings.caught}: ${world.caughtCount}`, VIEW_W / 2, 106, '#ffffff', { align: 'center' });
       drawCharacter('hero', { x: VIEW_W / 2, y: 196 - Math.abs(Math.sin(time * 6)) * 8, dir: 'down', moving: false, anim: 0 }, 0, 0);
       if (Math.floor(time * 2) % 2 === 0) text(hint.again, VIEW_W / 2, 218, '#ffd84a', { align: 'center' });
     }

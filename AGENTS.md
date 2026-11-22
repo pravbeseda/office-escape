@@ -10,7 +10,7 @@
 
 ## Module boundary
 
-- Logic modules are DOM-free and run under Node: `rng`, `tiles`, `grid`, `physics`, `sight`, `floorplan`, `enemies`, `rooms`, `world`.
+- Logic modules are DOM-free and run under Node: `rng`, `tiles`, `grid`, `physics`, `sight`, `floorplan`, `enemies`, `rooms`, `world`, `i18n`.
 - Presentation modules touch the DOM: `sprites`, `tileart`, `render`, `input`, `game`. `game.js` holds the scene state machine and drives `World`.
 - Every module is a classic-script IIFE: it exports via `module.exports` under Node and a `window` global in the browser. ES modules are off the table because browsers block them on `file://`.
 - The `<script>` order in `index.html` is the dependency order; a new module goes after everything it uses.
@@ -19,4 +19,4 @@
 
 - Generation is deterministic: layouts come from `hash(seed, floor, x, y, attempt)` via `rng.js`. Logic code takes randomness from a seeded rng; `Math.random` belongs to presentation only.
 - A catch resets enemy positions (`World.states`) but keeps the building (`World.screens`), so the player can learn the layout. A new building comes only from a new game.
-- In-game text is Russian; code, comments and docs are English.
+- In-game text lives in `i18n.js`, the only file with Cyrillic; a new string goes into every language there. Code, comments and docs are English.
