@@ -151,8 +151,9 @@
   }
 
   // The pixel font comes from Google Fonts; offline, the game falls back to monospace.
+  // Sampling every string of the language loads each script subset it needs.
   const fontReady = document.fonts
-    ? Promise.race([document.fonts.load('8px "Press Start 2P"', 'ПОБЕГ Escape'), new Promise((r) => setTimeout(r, 2500))])
+    ? Promise.race([document.fonts.load('8px "Press Start 2P"', JSON.stringify(strings)), new Promise((r) => setTimeout(r, 2500))])
     : Promise.resolve();
   fontReady.catch(() => {}).then(start);
 })(this);

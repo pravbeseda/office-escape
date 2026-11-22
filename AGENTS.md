@@ -19,4 +19,4 @@
 
 - Generation is deterministic: layouts come from `hash(seed, floor, x, y, attempt)` via `rng.js`. Logic code takes randomness from a seeded rng; `Math.random` belongs to presentation only.
 - A catch resets enemy positions (`World.states`) but keeps the building (`World.screens`), so the player can learn the layout. A new building comes only from a new game.
-- In-game text lives in `i18n.js`, and a new string goes into every language there. Code, comments and docs are English.
+- In-game text lives in `i18n.js`, the only file with Cyrillic; a new string goes into every language there. Code, comments and docs are English.

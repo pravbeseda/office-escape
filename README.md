@@ -1,6 +1,6 @@
 # Office Escape
 
-A 16-bit style browser game (*Побег из опенспейса* in Russian). You are a programmer who has had enough of work. Five floors of offices stand between your desk and the lobby exit, and every PM and boss who spots you gives chase.
+A 16-bit style browser game. You are a programmer who has had enough of work. Five floors of offices stand between your desk and the lobby exit, and every PM and boss who spots you gives chase.
 
 ![A team lead spots the hero in an open-plan office](docs/screenshot.png)
 
