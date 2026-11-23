@@ -14,6 +14,7 @@
   const CATCH_RANGE = 10;
   const CORNER_ASSIST = 6;
   const FOLLOW_DELAY = 0.3;
+  const NEAR_ENTRY = 3;
   const FIELD_W = COLS * TILE;
   const FIELD_H = ROWS * TILE;
   const EDGE = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] };
@@ -44,12 +45,17 @@
     e.pathKey = '';
   }
 
-  // Floor reachable from the doors, each tile with its step count from the nearest one.
-  function patrolTiles(screen) {
-    const reach = distanceMap(screen.tiles, doorOpenings(screen.doors));
+  // Step counts from the ways into a room: its doors and its stairs landing.
+  function entryDistances(screen) {
+    const entries = doorOpenings(screen.doors);
+    if (screen.stairs) entries.push(screen.stairs.landing);
+    return distanceMap(screen.tiles, entries);
+  }
+
+  function patrolTiles(screen, fromEntry) {
     const list = [];
     for (let r = 1; r < ROWS - 1; r++) {
-      for (let c = 1; c < COLS - 1; c++) if (screen.tiles[index(c, r)] === T.FLOOR && reach[index(c, r)] >= 0) list.push({ c, r, fromDoor: reach[index(c, r)] });
+      for (let c = 1; c < COLS - 1; c++) if (screen.tiles[index(c, r)] === T.FLOOR && fromEntry[index(c, r)] >= 0) list.push({ c, r });
     }
     return list;
   }
@@ -86,7 +92,8 @@
     stateOf(screen) {
       let state = this.states.get(screen.key);
       if (!state) {
-        state = { enemies: screen.spawns.map(createEnemy), incoming: [], walkable: patrolTiles(screen) };
+        const fromEntry = entryDistances(screen);
+        state = { enemies: screen.spawns.map(createEnemy), incoming: [], fromEntry, walkable: patrolTiles(screen, fromEntry) };
         this.states.set(screen.key, state);
       }
       return state;
@@ -161,7 +168,7 @@
       const to = this.screen;
       this.recallIncoming(fromState);
       this.sendFollowers(from, fromState, exitTile, this.stateOf(to), clampTile(this.hero.x, this.hero.y));
-      this.endSearches(fromState);
+      this.clearEntrances(fromState);
       this.visited.add(to.key);
       return { type: 'screen', dir, from, to };
     }
@@ -188,12 +195,13 @@
       state.incoming = [];
     }
 
-    // Rooms freeze while the hero is away, so a search he leaves would wait by its door; it ends on patrol away from the doors.
-    endSearches(state) {
-      const deepest = Math.max(...state.walkable.map((t) => t.fromDoor));
-      const away = state.walkable.filter((t) => t.fromDoor * 2 >= deepest);
+    // Rooms freeze while the hero is away, so anyone he leaves by a way in would wait there for him; they patrol farther off instead.
+    clearEntrances(state) {
+      const steps = (t) => state.fromEntry[index(t.c, t.r)];
+      const deepest = Math.max(...state.walkable.map(steps));
+      const away = state.walkable.filter((t) => steps(t) * 2 >= deepest);
       for (const e of state.enemies) {
-        if (e.state !== 'search' || ENEMY_TYPES[e.type].stationary) continue;
+        if (ENEMY_TYPES[e.type].stationary || steps(tileOf(e)) > NEAR_ENTRY) continue;
         placeOn(e, this.rng.pick(away));
         e.state = 'patrol';
       }
@@ -222,7 +230,7 @@
     takeStairs(delta) {
       const from = this.floor;
       this.recallIncoming(this.stateOf(this.screen));
-      this.endSearches(this.stateOf(this.screen));
+      this.clearEntrances(this.stateOf(this.screen));
       this.floor += delta;
       const { stairs, key } = this.screen;
       this.hero.x = stairs.landing.c * TILE + TILE / 2;
