@@ -162,7 +162,7 @@
       const toState = this.stateOf(to);
       this.recallIncoming(fromState, toState);
       this.sendFollowers(from, fromState, exitTile, toState, clampTile(this.hero.x, this.hero.y));
-      this.clearEntrances(fromState);
+      this.leaveBehind(fromState);
       this.visited.add(to.key);
       return { type: 'screen', dir, from, to };
     }
@@ -186,15 +186,15 @@
         const walked = Math.floor(((this.elapsed - departed) * ENEMY_TYPES[enemy.type].speed) / TILE);
         placeOn(enemy, path[Math.min(path.length - 1, walked)]);
         origin.enemies.push(enemy);
-        if (origin === toState) continue;
-        startSearch(enemy);
-        this.clearEntrances(origin);
+        if (origin !== toState) this.leaveBehind(origin);
       }
       state.incoming = [];
     }
 
-    // Rooms freeze while the hero is away, so anyone he leaves by a way in would wait there for him; they patrol farther off instead.
-    clearEntrances(state) {
+    // Rooms freeze while the hero is away, so whoever he leaves would pick up as if he never went: they lose his trail,
+    // and anyone by a way in patrols farther off instead of waiting there for him.
+    leaveBehind(state) {
+      for (const e of state.enemies) if (onTrail(e)) startSearch(e);
       const steps = (t) => state.fromEntry[index(t.c, t.r)];
       const deepest = Math.max(...state.walkable.map(steps));
       const away = state.walkable.filter((t) => steps(t) * 2 >= deepest);
@@ -228,7 +228,7 @@
     takeStairs(delta) {
       const from = this.floor;
       this.recallIncoming(this.stateOf(this.screen));
-      this.clearEntrances(this.stateOf(this.screen));
+      this.leaveBehind(this.stateOf(this.screen));
       this.floor += delta;
       const { stairs, key } = this.screen;
       this.hero.x = stairs.landing.c * TILE + TILE / 2;

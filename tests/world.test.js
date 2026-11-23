@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const { World } = require('../js/world.js');
 const { TILE, COLS, ROWS, T } = require('../js/tiles.js');
 const { FLOORS } = require('../js/floorplan.js');
-const { createEnemy, tileOf, ENEMY_TYPES, SEARCH_TIME } = require('../js/enemies.js');
+const { createEnemy, tileOf, onTrail, ENEMY_TYPES, SEARCH_TIME } = require('../js/enemies.js');
 const { index, distanceMap } = require('../js/grid.js');
-const { doorOpenings } = require('../js/rooms.js');
+const { doorOpenings, entrances } = require('../js/rooms.js');
 
 const STEP = 1 / 60;
 const STILL = { x: 0, y: 0 };
@@ -298,6 +298,44 @@ test('nobody is left on the stairs landing the hero leaves by', () => {
     const fromLanding = distanceMap(room.tiles, [stairs.landing]);
     assert.ok(fromLanding[index(tileOf(idler).c, tileOf(idler).r)] >= 4, `seed ${seed}: enemy waits on the landing`);
   }
+});
+
+test('a chaser the hero leaves by the stairs loses the trail', () => {
+  for (const state of ['alert', 'chase']) {
+    for (const seed of SEEDS) {
+      const world = new World(seed);
+      const plan = world.building.floors[FLOORS];
+      world.cx = plan.target.x;
+      world.cy = plan.target.y;
+      const room = world.screen;
+      const fromEntry = distanceMap(room.tiles, entrances(room));
+      const far = fromEntry.reduce((best, steps, i) => (steps > fromEntry[best] ? i : best), 0);
+      const chaser = createEnemy({ type: 'pm', c: far % COLS, r: Math.floor(far / COLS) });
+      chaser.state = state;
+      chaser.timer = 0.4;
+      chaser.lastSeen = { x: chaser.x, y: chaser.y };
+      world.enemies.push(chaser);
+      world.hero.x = room.stairs.c * TILE + 8;
+      world.hero.y = room.stairs.r * TILE + 8;
+      assert.ok(world.update(STEP, STILL).some((e) => e.type === 'floor'), `seed ${seed}: hero did not take the stairs`);
+      assert.equal(onTrail(chaser), false, `seed ${seed}, ${state}: chaser still tracks the hero`);
+    }
+  }
+});
+
+test('a guard the hero runs away from through a door loses the trail', () => {
+  const world = new World(1011);
+  world.floor = 1;
+  world.cx = world.building.floors[1].target.x;
+  world.cy = world.building.floors[1].target.y;
+  const guard = world.enemies[0];
+  assert.equal(guard.type, 'guard');
+  const setup = nearDoor(world);
+  Object.assign(world.hero, setup.hero);
+  guard.state = 'chase';
+  guard.lastSeen = { x: world.hero.x, y: world.hero.y };
+  run(world, 2, setup.move, 'screen');
+  assert.equal(onTrail(guard), false, 'guard still tracks the hero');
 });
 
 test('a chaser that has lost the trail does not follow the hero through the door', () => {
