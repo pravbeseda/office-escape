@@ -4,16 +4,17 @@
   const { TILE, COLS, ROWS, T } = node ? require('./tiles.js') : root.Tiles;
   const { hash, makeRng } = node ? require('./rng.js') : root.Rng;
   const { FLOORS, generateBuildingPlan } = node ? require('./floorplan.js') : root.FloorPlan;
-  const { generateScreen, doorOpenings } = node ? require('./rooms.js') : root.Rooms;
+  const { generateScreen, entrances } = node ? require('./rooms.js') : root.Rooms;
   const { index, distanceMap, findPath } = node ? require('./grid.js') : root.Grid;
   const { moveBody, overlapsSolid } = node ? require('./physics.js') : root.Physics;
-  const { ENEMY_TYPES, SEARCH_TIME, createEnemy, updateEnemy, isChasing, tileOf } = node ? require('./enemies.js') : root.Enemies;
+  const { ENEMY_TYPES, createEnemy, updateEnemy, canSee, startSearch, onTrail, tileOf } = node ? require('./enemies.js') : root.Enemies;
 
   const HERO_SPEED = 72;
   const HERO_HALF = 5;
   const CATCH_RANGE = 10;
   const CORNER_ASSIST = 6;
   const FOLLOW_DELAY = 0.3;
+  const NEAR_ENTRY = 3;
   const FIELD_W = COLS * TILE;
   const FIELD_H = ROWS * TILE;
   const EDGE = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] };
@@ -37,11 +38,17 @@
     }
   }
 
-  function patrolTiles(screen) {
-    const reach = distanceMap(screen.tiles, doorOpenings(screen.doors));
+  function placeOn(e, tile) {
+    e.x = tile.c * TILE + TILE / 2;
+    e.y = tile.r * TILE + TILE / 2;
+    e.goal = null;
+    e.pathKey = '';
+  }
+
+  function patrolTiles(screen, fromEntry) {
     const list = [];
     for (let r = 1; r < ROWS - 1; r++) {
-      for (let c = 1; c < COLS - 1; c++) if (screen.tiles[index(c, r)] === T.FLOOR && reach[index(c, r)] >= 0) list.push({ c, r });
+      for (let c = 1; c < COLS - 1; c++) if (screen.tiles[index(c, r)] === T.FLOOR && fromEntry[index(c, r)] >= 0) list.push({ c, r });
     }
     return list;
   }
@@ -78,7 +85,8 @@
     stateOf(screen) {
       let state = this.states.get(screen.key);
       if (!state) {
-        state = { enemies: screen.spawns.map(createEnemy), incoming: [], walkable: patrolTiles(screen) };
+        const fromEntry = distanceMap(screen.tiles, entrances(screen));
+        state = { enemies: screen.spawns.map(createEnemy), incoming: [], fromEntry, walkable: patrolTiles(screen, fromEntry) };
         this.states.set(screen.key, state);
       }
       return state;
@@ -102,6 +110,7 @@
     // move: {x, y} in -1..1. Returns events: screen, floor, spotted, caught, win.
     update(dt, move) {
       this.elapsed += dt;
+      this.landArrivals(this.stateOf(this.screen));
       this.moveHero(dt, move);
       const edge = this.edgeCrossed();
       if (edge) return [this.crossEdge(edge)];
@@ -150,50 +159,76 @@
       this.hero.x -= dx * FIELD_W;
       this.hero.y -= dy * FIELD_H;
       const to = this.screen;
-      this.landIncoming(fromState);
-      this.sendFollowers(from, fromState, exitTile, this.stateOf(to), clampTile(this.hero.x, this.hero.y));
+      const toState = this.stateOf(to);
+      this.recallIncoming(fromState, toState);
+      this.sendFollowers(from, fromState, exitTile, toState, clampTile(this.hero.x, this.hero.y));
+      this.clearEntrances(fromState);
       this.visited.add(to.key);
       return { type: 'screen', dir, from, to };
     }
 
-    // Chasers reach the door after walking there, so the delay depends on how far behind they were.
+    // Chasers reach the door after walking there, so the arrival depends on how far behind they were.
     sendFollowers(from, fromState, exitTile, toState, entryTile) {
       fromState.enemies = fromState.enemies.filter((e) => {
-        if (!isChasing(e) || ENEMY_TYPES[e.type].stationary) return true;
+        if (!onTrail(e) || ENEMY_TYPES[e.type].stationary) return true;
         const path = findPath(from.tiles, tileOf(e), exitTile);
         if (!path) return true;
-        const delay = (path.length * TILE) / ENEMY_TYPES[e.type].speed + FOLLOW_DELAY;
-        toState.incoming.push({ enemy: e, delay, tile: entryTile });
+        const arrives = this.elapsed + (path.length * TILE) / ENEMY_TYPES[e.type].speed + FOLLOW_DELAY;
+        toState.incoming.push({ enemy: e, origin: fromState, path, departed: this.elapsed, arrives, tile: entryTile });
         return false;
       });
     }
 
-    // Followers still on their way when the hero leaves simply end up in that room.
-    landIncoming(state) {
-      for (const pending of state.incoming) this.land(pending, state, false);
+    // A follower that has not come through yet when the hero leaves is still in its own room, part of the way to the door.
+    // Unless the hero is walking into that room, the follower has lost him there, and the room freezes like any he is not in.
+    recallIncoming(state, toState) {
+      for (const { enemy, origin, path, departed } of state.incoming) {
+        const walked = Math.floor(((this.elapsed - departed) * ENEMY_TYPES[enemy.type].speed) / TILE);
+        placeOn(enemy, path[Math.min(path.length - 1, walked)]);
+        origin.enemies.push(enemy);
+        if (origin === toState) continue;
+        startSearch(enemy);
+        this.clearEntrances(origin);
+      }
       state.incoming = [];
     }
 
-    land(pending, state, chasing) {
+    // Rooms freeze while the hero is away, so anyone he leaves by a way in would wait there for him; they patrol farther off instead.
+    clearEntrances(state) {
+      const steps = (t) => state.fromEntry[index(t.c, t.r)];
+      const deepest = Math.max(...state.walkable.map(steps));
+      const away = state.walkable.filter((t) => steps(t) * 2 >= deepest);
+      for (const e of state.enemies) {
+        if (ENEMY_TYPES[e.type].stationary || steps(tileOf(e)) > NEAR_ENTRY) continue;
+        placeOn(e, this.rng.pick(away));
+        e.state = 'patrol';
+      }
+    }
+
+    // Runs before the hero can leave, so a follower due this frame comes through instead of being recalled.
+    landArrivals(state) {
+      for (const pending of state.incoming.filter((p) => p.arrives <= this.elapsed)) this.land(pending, state);
+      state.incoming = state.incoming.filter((p) => p.arrives > this.elapsed);
+    }
+
+    // Coming in, a follower looks all around; it keeps the trail only if the hero is in sight.
+    land(pending, state) {
       const e = pending.enemy;
-      e.x = pending.tile.c * TILE + TILE / 2;
-      e.y = pending.tile.r * TILE + TILE / 2;
-      e.goal = null;
-      e.pathKey = '';
-      if (chasing) {
-        e.state = 'chase';
+      placeOn(e, pending.tile);
+      e.state = 'chase';
+      if (canSee(e, this.hero, this.screen.tiles)) {
         e.lostTime = 0;
         e.lastSeen = { x: this.hero.x, y: this.hero.y };
       } else {
-        e.state = 'search';
-        e.timer = SEARCH_TIME;
+        startSearch(e);
       }
       state.enemies.push(e);
     }
 
     takeStairs(delta) {
       const from = this.floor;
-      this.landIncoming(this.stateOf(this.screen));
+      this.recallIncoming(this.stateOf(this.screen));
+      this.clearEntrances(this.stateOf(this.screen));
       this.floor += delta;
       const { stairs, key } = this.screen;
       this.hero.x = stairs.landing.c * TILE + TILE / 2;
@@ -207,10 +242,6 @@
       const events = [];
       const screen = this.screen;
       const state = this.stateOf(screen);
-      for (const pending of state.incoming) pending.delay -= dt;
-      for (const pending of state.incoming.filter((p) => p.delay <= 0)) this.land(pending, state, true);
-      state.incoming = state.incoming.filter((p) => p.delay > 0);
-
       const ctx = { tiles: screen.tiles, hero: this.hero, dt, rng: this.rng, walkable: state.walkable };
       for (const e of state.enemies) {
         if (updateEnemy(e, ctx) === 'spotted') events.push({ type: 'spotted', enemy: e });

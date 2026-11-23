@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 const { World } = require('../js/world.js');
 const { TILE, COLS, ROWS, T } = require('../js/tiles.js');
 const { FLOORS } = require('../js/floorplan.js');
-const { createEnemy } = require('../js/enemies.js');
+const { createEnemy, tileOf, ENEMY_TYPES, SEARCH_TIME } = require('../js/enemies.js');
+const { index, distanceMap } = require('../js/grid.js');
+const { doorOpenings } = require('../js/rooms.js');
 
 const STEP = 1 / 60;
 const STILL = { x: 0, y: 0 };
@@ -25,6 +27,17 @@ function nearDoor(world) {
   if (d.w !== null) return { dir: 'w', hero: { x: TILE + 8, y: (d.w + 1) * TILE }, move: { x: -1, y: 0 }, behind: { c: 2, r: d.w } };
   if (d.s !== null) return { dir: 's', hero: { x: (d.s + 1) * TILE, y: (ROWS - 2) * TILE + 8 }, move: { x: 0, y: 1 }, behind: { c: d.s, r: ROWS - 3 } };
   return { dir: 'n', hero: { x: (d.n + 1) * TILE, y: TILE + 8 }, move: { x: 0, y: -1 }, behind: { c: d.n, r: 2 } };
+}
+
+// Centre of the floor tile of the current screen farthest from a point, as the crow flies.
+function farthestFloor(world, from) {
+  let best = null;
+  world.screen.tiles.forEach((tile, i) => {
+    if (tile !== T.FLOOR) return;
+    const p = { x: (i % COLS) * TILE + TILE / 2, y: Math.floor(i / COLS) * TILE + TILE / 2 };
+    if (!best || Math.hypot(p.x - from.x, p.y - from.y) > Math.hypot(best.x - from.x, best.y - from.y)) best = p;
+  });
+  return best;
 }
 
 const tileUnder = (world) => world.screen.tiles[Math.floor(world.hero.y / TILE) * COLS + Math.floor(world.hero.x / TILE)];
@@ -124,6 +137,184 @@ test('a chasing enemy follows the hero through the door and catches up', () => {
     assert.equal(world.enemies.includes(chaser), false, `seed ${seed}: chaser arrived instantly`);
     const events = run(world, 4, STILL, 'caught');
     assert.ok(events.some((e) => e.type === 'caught' && e.enemy === chaser), `seed ${seed}: chaser never arrived`);
+  }
+});
+
+test('a follower still on its way stays in its room, part of the way to the door, when the hero turns back', () => {
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const room = world.screen.key;
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const toDoor = distanceMap(world.screen.tiles, [setup.behind]);
+    const far = world.screen.tiles.reduce((best, tile, i) => (tile === T.FLOOR && toDoor[i] > toDoor[best] ? i : best), 0);
+    const chaser = createEnemy({ type: 'pm', c: far % COLS, r: Math.floor(far / COLS) });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    const stepsLeft = () => toDoor[index(tileOf(chaser).c, tileOf(chaser).r)];
+    const atDeparture = stepsLeft();
+    assert.ok(atDeparture >= 8, `seed ${seed}: chaser starts too close to the door`);
+    run(world, 1, STILL);
+    run(world, 1, { x: -setup.move.x, y: -setup.move.y }, 'screen');
+    assert.equal(world.screen.key, room);
+    assert.ok(world.enemies.includes(chaser), `seed ${seed}: chaser left its room`);
+    const onReturn = stepsLeft();
+    assert.ok(onReturn < atDeparture, `seed ${seed}: chaser did not walk on`);
+    assert.ok(onReturn >= atDeparture - 4, `seed ${seed}: chaser jumped toward the door`);
+  }
+});
+
+test('a follower due on the frame the hero leaves has come through and follows again', () => {
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...setup.behind });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    const pending = world.stateOf(world.screen).incoming.find((p) => p.enemy === chaser);
+    while (world.elapsed + STEP < pending.arrives) world.update(STEP, STILL);
+    const back = world.update(STEP, { x: -setup.move.x, y: -setup.move.y });
+    assert.ok(back.some((e) => e.type === 'screen'), `seed ${seed}: hero did not turn back on the arrival frame`);
+    assert.equal(world.enemies.includes(chaser), false, `seed ${seed}: chaser was sent back instead of coming through`);
+    const events = run(world, 3, STILL, 'caught');
+    assert.ok(events.some((e) => e.type === 'caught' && e.enemy === chaser), `seed ${seed}: chaser stopped following`);
+  }
+});
+
+test('a follower that comes in and does not see the hero loses the trail', () => {
+  const sight = ENEMY_TYPES.pm.sight * TILE;
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...setup.behind });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    Object.assign(world.hero, farthestFloor(world, world.hero));
+    for (let t = 0; t < 3 && !world.enemies.includes(chaser); t += STEP) world.update(STEP, STILL);
+    assert.ok(world.enemies.includes(chaser), `seed ${seed}: chaser never came through`);
+    assert.ok(Math.hypot(chaser.x - world.hero.x, chaser.y - world.hero.y) > sight, `seed ${seed}: hero is within sight`);
+    const landed = { x: chaser.x, y: chaser.y };
+    run(world, 1, STILL);
+    assert.equal(chaser.state, 'search', `seed ${seed}: chaser kept the trail`);
+    assert.deepEqual({ x: chaser.x, y: chaser.y }, landed, `seed ${seed}: chaser went after the hero`);
+  }
+});
+
+test('a follower the hero leaves behind does not wait for him by the door', () => {
+  // Searching in the doorway, then on patrol with a pause left over from before the chase.
+  for (const lingers of [0, SEARCH_TIME + 0.1]) {
+    for (const seed of SEEDS) {
+      const world = new World(seed);
+      const setup = nearDoor(world);
+      Object.assign(world.hero, setup.hero);
+      const chaser = createEnemy({ type: 'pm', ...setup.behind });
+      chaser.state = 'chase';
+      chaser.wait = 1.5;
+      chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+      world.enemies.push(chaser);
+      run(world, 2, setup.move, 'screen');
+      const room = world.screen;
+      const entry = { x: world.hero.x, y: world.hero.y };
+      Object.assign(world.hero, farthestFloor(world, world.hero));
+      for (let t = 0; t < 3 && !world.enemies.includes(chaser); t += STEP) world.update(STEP, STILL);
+      assert.equal(chaser.state, 'search', `seed ${seed}: chaser did not lose the trail`);
+      run(world, lingers, STILL);
+      Object.assign(world.hero, { x: entry.x - setup.move.x * TILE, y: entry.y - setup.move.y * TILE });
+      assert.ok(world.update(STEP, STILL).some((e) => e.type === 'screen'), `seed ${seed}: hero did not leave`);
+      assert.equal(chaser.state, 'patrol', `seed ${seed}, ${lingers}s: chaser is not on patrol`);
+      const fromDoors = distanceMap(room.tiles, doorOpenings(room.doors));
+      assert.ok(fromDoors[index(tileOf(chaser).c, tileOf(chaser).r)] >= 4, `seed ${seed}, ${lingers}s: chaser waits by a door`);
+    }
+  }
+});
+
+const OPPOSITE = { n: 's', s: 'n', w: 'e', e: 'w' };
+const OUTSIDE = {
+  n: (d) => ({ x: (d + 1) * TILE, y: -1 }),
+  s: (d) => ({ x: (d + 1) * TILE, y: ROWS * TILE }),
+  w: (d) => ({ x: -1, y: (d + 1) * TILE }),
+  e: (d) => ({ x: COLS * TILE, y: (d + 1) * TILE }),
+};
+
+// Puts a chaser at `start` behind the hero, takes the hero through the start screen's door, and on out of the
+// next screen by another door before the chaser arrives. Returns null when the next screen has no other door.
+function goOnAhead(seed, start) {
+  const world = new World(seed);
+  const room = world.screen;
+  const setup = nearDoor(world);
+  Object.assign(world.hero, setup.hero);
+  const chaser = createEnemy({ type: 'pm', ...start(world, setup) });
+  chaser.state = 'chase';
+  chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+  world.enemies.push(chaser);
+  run(world, 2, setup.move, 'screen');
+  const doors = world.screen.doors;
+  const onward = ['n', 's', 'w', 'e'].find((dir) => dir !== OPPOSITE[setup.dir] && doors[dir] !== null);
+  if (!onward) return null;
+  Object.assign(world.hero, OUTSIDE[onward](doors[onward]));
+  assert.ok(world.update(STEP, STILL).some((e) => e.type === 'screen'), `seed ${seed}: hero did not go on`);
+  assert.ok(world.stateOf(room).enemies.includes(chaser), `seed ${seed}: chaser was not recalled`);
+  return { room, chaser };
+}
+
+test('a follower recalled to a room the hero has left for good does not wait by its door', () => {
+  const outcomes = SEEDS.map((seed) => [seed, goOnAhead(seed, (world, setup) => setup.behind)]).filter(([, o]) => o);
+  assert.ok(outcomes.length >= 3, `only ${outcomes.length} seeds have a room to go on to`);
+  for (const [seed, { room, chaser }] of outcomes) {
+    assert.equal(chaser.state, 'patrol', `seed ${seed}: chaser is not on patrol`);
+    const fromDoors = distanceMap(room.tiles, doorOpenings(room.doors));
+    assert.ok(fromDoors[index(tileOf(chaser).c, tileOf(chaser).r)] >= 4, `seed ${seed}: chaser waits by a door`);
+  }
+});
+
+test('a follower recalled to a room the hero has left for good loses the trail', () => {
+  const far = (world) => tileOf(farthestFloor(world, world.hero));
+  const outcomes = SEEDS.map((seed) => [seed, goOnAhead(seed, far)]).filter(([, o]) => o);
+  assert.ok(outcomes.length >= 3, `only ${outcomes.length} seeds have a room to go on to`);
+  for (const [seed, { chaser }] of outcomes) assert.equal(chaser.state, 'search', `seed ${seed}: chaser still tracks the hero`);
+});
+
+test('nobody is left on the stairs landing the hero leaves by', () => {
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const plan = world.building.floors[FLOORS];
+    world.cx = plan.target.x;
+    world.cy = plan.target.y;
+    const room = world.screen;
+    const { stairs } = room;
+    const idler = createEnemy({ type: 'pm', ...stairs.landing });
+    world.enemies.push(idler);
+    world.hero.x = stairs.c * TILE + 8;
+    world.hero.y = stairs.r * TILE + 8;
+    assert.ok(world.update(STEP, STILL).some((e) => e.type === 'floor'), `seed ${seed}: hero did not take the stairs`);
+    const fromLanding = distanceMap(room.tiles, [stairs.landing]);
+    assert.ok(fromLanding[index(tileOf(idler).c, tileOf(idler).r)] >= 4, `seed ${seed}: enemy waits on the landing`);
+  }
+});
+
+test('a chaser that has lost the trail does not follow the hero through the door', () => {
+  const sight = ENEMY_TYPES.pm.sight * TILE;
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const room = world.screen;
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...tileOf(farthestFloor(world, world.hero)) });
+    assert.ok(Math.hypot(chaser.x - world.hero.x, chaser.y - world.hero.y) > sight + 3 * TILE, `seed ${seed}: chaser starts within sight`);
+    chaser.state = 'chase';
+    chaser.lostTime = ENEMY_TYPES.pm.memory + 0.5;
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    assert.ok(world.stateOf(room).enemies.includes(chaser), `seed ${seed}: chaser followed without knowing where the hero went`);
   }
 });
 
