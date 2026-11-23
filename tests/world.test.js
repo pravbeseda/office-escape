@@ -5,6 +5,7 @@ const { TILE, COLS, ROWS, T } = require('../js/tiles.js');
 const { FLOORS } = require('../js/floorplan.js');
 const { createEnemy, tileOf, ENEMY_TYPES } = require('../js/enemies.js');
 const { index, distanceMap } = require('../js/grid.js');
+const { doorOpenings } = require('../js/rooms.js');
 
 const STEP = 1 / 60;
 const STILL = { x: 0, y: 0 };
@@ -204,6 +205,29 @@ test('a follower that comes in and does not see the hero loses the trail', () =>
     run(world, 1, STILL);
     assert.equal(chaser.state, 'search', `seed ${seed}: chaser kept the trail`);
     assert.deepEqual({ x: chaser.x, y: chaser.y }, landed, `seed ${seed}: chaser went after the hero`);
+  }
+});
+
+test('a search the hero leaves behind ends on patrol away from the doors', () => {
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...setup.behind });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    const room = world.screen;
+    const entry = { x: world.hero.x, y: world.hero.y };
+    Object.assign(world.hero, farthestFloor(world, world.hero));
+    for (let t = 0; t < 3 && !world.enemies.includes(chaser); t += STEP) world.update(STEP, STILL);
+    assert.equal(chaser.state, 'search', `seed ${seed}: chaser did not lose the trail`);
+    Object.assign(world.hero, { x: entry.x - setup.move.x * TILE, y: entry.y - setup.move.y * TILE });
+    assert.ok(world.update(STEP, STILL).some((e) => e.type === 'screen'), `seed ${seed}: hero did not leave`);
+    assert.equal(chaser.state, 'patrol', `seed ${seed}: search did not end`);
+    const fromDoors = distanceMap(room.tiles, doorOpenings(room.doors));
+    assert.ok(fromDoors[index(tileOf(chaser).c, tileOf(chaser).r)] >= 4, `seed ${seed}: chaser waits by a door`);
   }
 });
 

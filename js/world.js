@@ -44,11 +44,12 @@
     e.pathKey = '';
   }
 
+  // Floor reachable from the doors, each tile with its step count from the nearest one.
   function patrolTiles(screen) {
     const reach = distanceMap(screen.tiles, doorOpenings(screen.doors));
     const list = [];
     for (let r = 1; r < ROWS - 1; r++) {
-      for (let c = 1; c < COLS - 1; c++) if (screen.tiles[index(c, r)] === T.FLOOR && reach[index(c, r)] >= 0) list.push({ c, r });
+      for (let c = 1; c < COLS - 1; c++) if (screen.tiles[index(c, r)] === T.FLOOR && reach[index(c, r)] >= 0) list.push({ c, r, fromDoor: reach[index(c, r)] });
     }
     return list;
   }
@@ -160,6 +161,7 @@
       const to = this.screen;
       this.recallIncoming(fromState);
       this.sendFollowers(from, fromState, exitTile, this.stateOf(to), clampTile(this.hero.x, this.hero.y));
+      this.endSearches(fromState);
       this.visited.add(to.key);
       return { type: 'screen', dir, from, to };
     }
@@ -186,6 +188,17 @@
       state.incoming = [];
     }
 
+    // Rooms freeze while the hero is away, so a search he leaves would wait by its door; it ends on patrol away from the doors.
+    endSearches(state) {
+      const deepest = Math.max(...state.walkable.map((t) => t.fromDoor));
+      const away = state.walkable.filter((t) => t.fromDoor * 2 >= deepest);
+      for (const e of state.enemies) {
+        if (e.state !== 'search' || ENEMY_TYPES[e.type].stationary) continue;
+        placeOn(e, this.rng.pick(away));
+        e.state = 'patrol';
+      }
+    }
+
     // Runs before the hero can leave, so a follower due this frame comes through instead of being recalled.
     landArrivals(state) {
       for (const pending of state.incoming.filter((p) => p.arrives <= this.elapsed)) this.land(pending, state);
@@ -209,6 +222,7 @@
     takeStairs(delta) {
       const from = this.floor;
       this.recallIncoming(this.stateOf(this.screen));
+      this.endSearches(this.stateOf(this.screen));
       this.floor += delta;
       const { stairs, key } = this.screen;
       this.hero.x = stairs.landing.c * TILE + TILE / 2;
