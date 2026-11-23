@@ -109,6 +109,7 @@
     // move: {x, y} in -1..1. Returns events: screen, floor, spotted, caught, win.
     update(dt, move) {
       this.elapsed += dt;
+      this.landArrivals(this.stateOf(this.screen));
       this.moveHero(dt, move);
       const edge = this.edgeCrossed();
       if (edge) return [this.crossEdge(edge)];
@@ -185,6 +186,12 @@
       state.incoming = [];
     }
 
+    // Runs before the hero can leave, so a follower due this frame comes through instead of being recalled.
+    landArrivals(state) {
+      for (const pending of state.incoming.filter((p) => p.arrives <= this.elapsed)) this.land(pending, state);
+      state.incoming = state.incoming.filter((p) => p.arrives > this.elapsed);
+    }
+
     land(pending, state) {
       const e = pending.enemy;
       placeOn(e, pending.tile);
@@ -210,9 +217,6 @@
       const events = [];
       const screen = this.screen;
       const state = this.stateOf(screen);
-      for (const pending of state.incoming.filter((p) => p.arrives <= this.elapsed)) this.land(pending, state);
-      state.incoming = state.incoming.filter((p) => p.arrives > this.elapsed);
-
       const ctx = { tiles: screen.tiles, hero: this.hero, dt, rng: this.rng, walkable: state.walkable };
       for (const e of state.enemies) {
         if (updateEnemy(e, ctx) === 'spotted') events.push({ type: 'spotted', enemy: e });

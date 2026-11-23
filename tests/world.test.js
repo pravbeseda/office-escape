@@ -154,6 +154,26 @@ test('a follower still on its way stays in its room, part of the way to the door
   }
 });
 
+test('a follower due on the frame the hero leaves has come through and follows again', () => {
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...setup.behind });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    const pending = world.stateOf(world.screen).incoming.find((p) => p.enemy === chaser);
+    while (world.elapsed + STEP < pending.arrives) world.update(STEP, STILL);
+    const back = world.update(STEP, { x: -setup.move.x, y: -setup.move.y });
+    assert.ok(back.some((e) => e.type === 'screen'), `seed ${seed}: hero did not turn back on the arrival frame`);
+    assert.equal(world.enemies.includes(chaser), false, `seed ${seed}: chaser was sent back instead of coming through`);
+    const events = run(world, 3, STILL, 'caught');
+    assert.ok(events.some((e) => e.type === 'caught' && e.enemy === chaser), `seed ${seed}: chaser stopped following`);
+  }
+});
+
 test('the guard does not leave the lobby', () => {
   const world = new World(1011);
   world.floor = 1;
