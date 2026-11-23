@@ -225,11 +225,12 @@
     }
   }
 
-  const isChasing = (e) => e.state === 'chase' || e.state === 'alert';
+  // Knows where the hero is: has just spotted him, or still tracks him from memory.
+  const onTrail = (e) => e.state === 'alert' || (e.state === 'chase' && e.lostTime <= ENEMY_TYPES[e.type].memory);
 
   const api = {
     ENEMY_TYPES, FLOOR_ROSTER, SEARCH_TIME,
-    createEnemy, updateEnemy, canSee, isChasing, tileOf,
+    createEnemy, updateEnemy, canSee, startSearch, onTrail, tileOf,
   };
   if (node) module.exports = api;
   else root.Enemies = api;

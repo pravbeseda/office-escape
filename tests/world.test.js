@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { World } = require('../js/world.js');
 const { TILE, COLS, ROWS, T } = require('../js/tiles.js');
 const { FLOORS } = require('../js/floorplan.js');
-const { createEnemy, tileOf } = require('../js/enemies.js');
+const { createEnemy, tileOf, ENEMY_TYPES } = require('../js/enemies.js');
 const { index, distanceMap } = require('../js/grid.js');
 
 const STEP = 1 / 60;
@@ -26,6 +26,17 @@ function nearDoor(world) {
   if (d.w !== null) return { dir: 'w', hero: { x: TILE + 8, y: (d.w + 1) * TILE }, move: { x: -1, y: 0 }, behind: { c: 2, r: d.w } };
   if (d.s !== null) return { dir: 's', hero: { x: (d.s + 1) * TILE, y: (ROWS - 2) * TILE + 8 }, move: { x: 0, y: 1 }, behind: { c: d.s, r: ROWS - 3 } };
   return { dir: 'n', hero: { x: (d.n + 1) * TILE, y: TILE + 8 }, move: { x: 0, y: -1 }, behind: { c: d.n, r: 2 } };
+}
+
+// Centre of the floor tile of the current screen farthest from a point, as the crow flies.
+function farthestFloor(world, from) {
+  let best = null;
+  world.screen.tiles.forEach((tile, i) => {
+    if (tile !== T.FLOOR) return;
+    const p = { x: (i % COLS) * TILE + TILE / 2, y: Math.floor(i / COLS) * TILE + TILE / 2 };
+    if (!best || Math.hypot(p.x - from.x, p.y - from.y) > Math.hypot(best.x - from.x, best.y - from.y)) best = p;
+  });
+  return best;
 }
 
 const tileUnder = (world) => world.screen.tiles[Math.floor(world.hero.y / TILE) * COLS + Math.floor(world.hero.x / TILE)];
@@ -171,6 +182,46 @@ test('a follower due on the frame the hero leaves has come through and follows a
     assert.equal(world.enemies.includes(chaser), false, `seed ${seed}: chaser was sent back instead of coming through`);
     const events = run(world, 3, STILL, 'caught');
     assert.ok(events.some((e) => e.type === 'caught' && e.enemy === chaser), `seed ${seed}: chaser stopped following`);
+  }
+});
+
+test('a follower that comes in and does not see the hero loses the trail', () => {
+  const sight = ENEMY_TYPES.pm.sight * TILE;
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...setup.behind });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    Object.assign(world.hero, farthestFloor(world, world.hero));
+    for (let t = 0; t < 3 && !world.enemies.includes(chaser); t += STEP) world.update(STEP, STILL);
+    assert.ok(world.enemies.includes(chaser), `seed ${seed}: chaser never came through`);
+    assert.ok(Math.hypot(chaser.x - world.hero.x, chaser.y - world.hero.y) > sight, `seed ${seed}: hero is within sight`);
+    const landed = { x: chaser.x, y: chaser.y };
+    run(world, 1, STILL);
+    assert.equal(chaser.state, 'search', `seed ${seed}: chaser kept the trail`);
+    assert.deepEqual({ x: chaser.x, y: chaser.y }, landed, `seed ${seed}: chaser went after the hero`);
+  }
+});
+
+test('a chaser that has lost the trail does not follow the hero through the door', () => {
+  const sight = ENEMY_TYPES.pm.sight * TILE;
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const room = world.screen;
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...tileOf(farthestFloor(world, world.hero)) });
+    assert.ok(Math.hypot(chaser.x - world.hero.x, chaser.y - world.hero.y) > sight + 3 * TILE, `seed ${seed}: chaser starts within sight`);
+    chaser.state = 'chase';
+    chaser.lostTime = ENEMY_TYPES.pm.memory + 0.5;
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    assert.ok(world.stateOf(room).enemies.includes(chaser), `seed ${seed}: chaser followed without knowing where the hero went`);
   }
 });
 

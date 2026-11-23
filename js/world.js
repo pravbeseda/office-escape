@@ -7,7 +7,7 @@
   const { generateScreen, doorOpenings } = node ? require('./rooms.js') : root.Rooms;
   const { index, distanceMap, findPath } = node ? require('./grid.js') : root.Grid;
   const { moveBody, overlapsSolid } = node ? require('./physics.js') : root.Physics;
-  const { ENEMY_TYPES, createEnemy, updateEnemy, isChasing, tileOf } = node ? require('./enemies.js') : root.Enemies;
+  const { ENEMY_TYPES, createEnemy, updateEnemy, canSee, startSearch, onTrail, tileOf } = node ? require('./enemies.js') : root.Enemies;
 
   const HERO_SPEED = 72;
   const HERO_HALF = 5;
@@ -167,7 +167,7 @@
     // Chasers reach the door after walking there, so the arrival depends on how far behind they were.
     sendFollowers(from, fromState, exitTile, toState, entryTile) {
       fromState.enemies = fromState.enemies.filter((e) => {
-        if (!isChasing(e) || ENEMY_TYPES[e.type].stationary) return true;
+        if (!onTrail(e) || ENEMY_TYPES[e.type].stationary) return true;
         const path = findPath(from.tiles, tileOf(e), exitTile);
         if (!path) return true;
         const arrives = this.elapsed + (path.length * TILE) / ENEMY_TYPES[e.type].speed + FOLLOW_DELAY;
@@ -192,12 +192,17 @@
       state.incoming = state.incoming.filter((p) => p.arrives > this.elapsed);
     }
 
+    // Coming in, a follower looks all around; it keeps the trail only if the hero is in sight.
     land(pending, state) {
       const e = pending.enemy;
       placeOn(e, pending.tile);
       e.state = 'chase';
-      e.lostTime = 0;
-      e.lastSeen = { x: this.hero.x, y: this.hero.y };
+      if (canSee(e, this.hero, this.screen.tiles)) {
+        e.lostTime = 0;
+        e.lastSeen = { x: this.hero.x, y: this.hero.y };
+      } else {
+        startSearch(e);
+      }
       state.enemies.push(e);
     }
 
