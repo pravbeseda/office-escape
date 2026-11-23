@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { World } = require('../js/world.js');
 const { TILE, COLS, ROWS, T } = require('../js/tiles.js');
 const { FLOORS } = require('../js/floorplan.js');
-const { createEnemy } = require('../js/enemies.js');
+const { createEnemy, tileOf } = require('../js/enemies.js');
+const { index, distanceMap } = require('../js/grid.js');
 
 const STEP = 1 / 60;
 const STILL = { x: 0, y: 0 };
@@ -124,6 +125,32 @@ test('a chasing enemy follows the hero through the door and catches up', () => {
     assert.equal(world.enemies.includes(chaser), false, `seed ${seed}: chaser arrived instantly`);
     const events = run(world, 4, STILL, 'caught');
     assert.ok(events.some((e) => e.type === 'caught' && e.enemy === chaser), `seed ${seed}: chaser never arrived`);
+  }
+});
+
+test('a follower still on its way stays in its room, part of the way to the door, when the hero turns back', () => {
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const room = world.screen.key;
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const toDoor = distanceMap(world.screen.tiles, [setup.behind]);
+    const far = world.screen.tiles.reduce((best, tile, i) => (tile === T.FLOOR && toDoor[i] > toDoor[best] ? i : best), 0);
+    const chaser = createEnemy({ type: 'pm', c: far % COLS, r: Math.floor(far / COLS) });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    const stepsLeft = () => toDoor[index(tileOf(chaser).c, tileOf(chaser).r)];
+    const atDeparture = stepsLeft();
+    assert.ok(atDeparture >= 8, `seed ${seed}: chaser starts too close to the door`);
+    run(world, 1, STILL);
+    run(world, 1, { x: -setup.move.x, y: -setup.move.y }, 'screen');
+    assert.equal(world.screen.key, room);
+    assert.ok(world.enemies.includes(chaser), `seed ${seed}: chaser left its room`);
+    const onReturn = stepsLeft();
+    assert.ok(onReturn < atDeparture, `seed ${seed}: chaser did not walk on`);
+    assert.ok(onReturn >= atDeparture - 4, `seed ${seed}: chaser jumped toward the door`);
   }
 });
 
