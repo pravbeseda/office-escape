@@ -180,13 +180,15 @@
     }
 
     // A follower that has not come through yet when the hero leaves is still in its own room, part of the way to the door.
-    // Unless the hero is walking into that room, it is frozen now, and the rule for frozen rooms holds there as well.
+    // Unless the hero is walking into that room, the follower has lost him there, and the room freezes like any he is not in.
     recallIncoming(state, toState) {
       for (const { enemy, origin, path, departed } of state.incoming) {
         const walked = Math.floor(((this.elapsed - departed) * ENEMY_TYPES[enemy.type].speed) / TILE);
         placeOn(enemy, path[Math.min(path.length - 1, walked)]);
         origin.enemies.push(enemy);
-        if (origin !== toState) this.clearEntrances(origin);
+        if (origin === toState) continue;
+        startSearch(enemy);
+        this.clearEntrances(origin);
       }
       state.incoming = [];
     }
