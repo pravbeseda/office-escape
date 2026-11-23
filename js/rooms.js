@@ -76,6 +76,13 @@
     return points;
   }
 
+  // The ways into a room: its door openings and its stairs landing.
+  function entrances(screen) {
+    const points = doorOpenings(screen.doors);
+    if (screen.stairs) points.push(screen.stairs.landing);
+    return points;
+  }
+
   function clearDoorZones(room, doors) {
     for (const { c, r } of doorOpenings(doors)) room.set(c, r, T.FLOOR);
     if (doors.n !== null) room.fillRect(doors.n - 1, 1, 4, 2, T.FLOOR);
@@ -255,9 +262,7 @@
     const spawns = [];
     if (extras.bossPost) spawns.push({ type: cell.roster.boss, ...extras.bossPost, dir: 'down' });
     const count = screen.role === 'boss' ? 0 : rng.int(cell.roster.count[0], cell.roster.count[1]);
-    const safe = [...doorOpenings(screen.doors)];
-    if (screen.stairs) safe.push(screen.stairs.landing);
-    const fromDoors = distanceMap(screen.tiles, safe);
+    const fromDoors = distanceMap(screen.tiles, entrances(screen));
     let candidates = [];
     for (let r = 1; r < ROWS - 1; r++) {
       for (let c = 1; c < COLS - 1; c++) {
@@ -312,7 +317,7 @@
     return buildScreen(cell, makeRng(hash(building.seed, floor, x, y, MAX_ATTEMPTS)), false);
   }
 
-  const api = { generateScreen, doorOpenings };
+  const api = { generateScreen, doorOpenings, entrances };
   if (node) module.exports = api;
   else root.Rooms = api;
 })(this);

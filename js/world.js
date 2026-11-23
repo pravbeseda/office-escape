@@ -4,7 +4,7 @@
   const { TILE, COLS, ROWS, T } = node ? require('./tiles.js') : root.Tiles;
   const { hash, makeRng } = node ? require('./rng.js') : root.Rng;
   const { FLOORS, generateBuildingPlan } = node ? require('./floorplan.js') : root.FloorPlan;
-  const { generateScreen, doorOpenings } = node ? require('./rooms.js') : root.Rooms;
+  const { generateScreen, entrances } = node ? require('./rooms.js') : root.Rooms;
   const { index, distanceMap, findPath } = node ? require('./grid.js') : root.Grid;
   const { moveBody, overlapsSolid } = node ? require('./physics.js') : root.Physics;
   const { ENEMY_TYPES, createEnemy, updateEnemy, canSee, startSearch, onTrail, tileOf } = node ? require('./enemies.js') : root.Enemies;
@@ -43,13 +43,6 @@
     e.y = tile.r * TILE + TILE / 2;
     e.goal = null;
     e.pathKey = '';
-  }
-
-  // Step counts from the ways into a room: its doors and its stairs landing.
-  function entryDistances(screen) {
-    const entries = doorOpenings(screen.doors);
-    if (screen.stairs) entries.push(screen.stairs.landing);
-    return distanceMap(screen.tiles, entries);
   }
 
   function patrolTiles(screen, fromEntry) {
@@ -92,7 +85,7 @@
     stateOf(screen) {
       let state = this.states.get(screen.key);
       if (!state) {
-        const fromEntry = entryDistances(screen);
+        const fromEntry = distanceMap(screen.tiles, entrances(screen));
         state = { enemies: screen.spawns.map(createEnemy), incoming: [], fromEntry, walkable: patrolTiles(screen, fromEntry) };
         this.states.set(screen.key, state);
       }
@@ -166,8 +159,9 @@
       this.hero.x -= dx * FIELD_W;
       this.hero.y -= dy * FIELD_H;
       const to = this.screen;
-      this.recallIncoming(fromState);
-      this.sendFollowers(from, fromState, exitTile, this.stateOf(to), clampTile(this.hero.x, this.hero.y));
+      const toState = this.stateOf(to);
+      this.recallIncoming(fromState, toState);
+      this.sendFollowers(from, fromState, exitTile, toState, clampTile(this.hero.x, this.hero.y));
       this.clearEntrances(fromState);
       this.visited.add(to.key);
       return { type: 'screen', dir, from, to };
@@ -186,11 +180,13 @@
     }
 
     // A follower that has not come through yet when the hero leaves is still in its own room, part of the way to the door.
-    recallIncoming(state) {
+    // Unless the hero is walking into that room, it is frozen now, and the rule for frozen rooms holds there as well.
+    recallIncoming(state, toState) {
       for (const { enemy, origin, path, departed } of state.incoming) {
         const walked = Math.floor(((this.elapsed - departed) * ENEMY_TYPES[enemy.type].speed) / TILE);
         placeOn(enemy, path[Math.min(path.length - 1, walked)]);
         origin.enemies.push(enemy);
+        if (origin !== toState) this.clearEntrances(origin);
       }
       state.incoming = [];
     }

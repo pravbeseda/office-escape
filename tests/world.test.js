@@ -236,6 +236,38 @@ test('a follower the hero leaves behind does not wait for him by the door', () =
   }
 });
 
+test('a follower recalled to a room the hero has left for good does not wait by its door', () => {
+  const outside = {
+    n: (d) => ({ x: (d + 1) * TILE, y: -1 }),
+    s: (d) => ({ x: (d + 1) * TILE, y: ROWS * TILE }),
+    w: (d) => ({ x: -1, y: (d + 1) * TILE }),
+    e: (d) => ({ x: COLS * TILE, y: (d + 1) * TILE }),
+  };
+  const back = { n: 's', s: 'n', w: 'e', e: 'w' };
+  let checked = 0;
+  for (const seed of SEEDS) {
+    const world = new World(seed);
+    const room = world.screen;
+    const setup = nearDoor(world);
+    Object.assign(world.hero, setup.hero);
+    const chaser = createEnemy({ type: 'pm', ...setup.behind });
+    chaser.state = 'chase';
+    chaser.lastSeen = { x: world.hero.x, y: world.hero.y };
+    world.enemies.push(chaser);
+    run(world, 2, setup.move, 'screen');
+    const onward = Object.keys(outside).find((dir) => dir !== back[setup.dir] && world.screen.doors[dir] !== null);
+    if (!onward) continue;
+    checked++;
+    Object.assign(world.hero, outside[onward](world.screen.doors[onward]));
+    assert.ok(world.update(STEP, STILL).some((e) => e.type === 'screen'), `seed ${seed}: hero did not go on`);
+    assert.ok(world.stateOf(room).enemies.includes(chaser), `seed ${seed}: chaser was not recalled`);
+    assert.equal(chaser.state, 'patrol', `seed ${seed}: chaser is not on patrol`);
+    const fromDoors = distanceMap(room.tiles, doorOpenings(room.doors));
+    assert.ok(fromDoors[index(tileOf(chaser).c, tileOf(chaser).r)] >= 4, `seed ${seed}: chaser waits by a door`);
+  }
+  assert.ok(checked >= 3, `only ${checked} seeds have a room to go on to`);
+});
+
 test('nobody is left on the stairs landing the hero leaves by', () => {
   for (const seed of SEEDS) {
     const world = new World(seed);
